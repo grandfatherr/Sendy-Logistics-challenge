@@ -1,0 +1,581 @@
+---
+title: "SENDY LOGISTICS"
+author: "THE TITANS"
+date: "19/07/2021"
+output: html_document
+---
+
+## **DATA UNDERSTANDING**
+
+Sendy ltd aims at taking away the uncertainty of conventional delivery methods. The company aims at making the process simple, transparent and secure. The main goal is to ensure timely delivery of orders, ensure the goods are safe in transit all this time ensuring they share the time it takes for the order to arrive.
+
+## **METRIC OF SUCCESS**
+The project will be deemed a successful project if we are able to perform forecasting on given data to come up with predictions on the estimated time of arrival given various features and variables. Being able to come up with the relevant features for this particular project by performing feature selection since it helps in improving the prediction performance and allows for faster and effective predictors.
+
+## **CONTEXT**
+
+The commercial activity of transporting goods to customers is known as logistics. For any logistics company, being timely is a key factor in establishing a competitive advantage over the rest of the competition and ensuring we remain industry leaders while at it. A logistic company should also ensure management of their fleet and ensure timely deliveries of the orders entrusted to them. Sendy is one such company.
+
+
+## **EXPERIMENTAL DESIGN**
+
+* Import the relevant libraries that we will use in our analysis
+* Read and explore the dataset we will use for our project
+* Define the appropriateness of the available data with regards to the project
+* Find and deal with outliers, anomalies, and missing data within the dataset.
+* Perform univariate and bivariate analysis while recording our observations.
+* Implementing the solution using various supervised machine learning algorithms
+* Challenging the Solution
+* Follow up Questions
+
+## **DATA RELEVANCE**
+Our data is very relevant since most of our variables contribute highly to the efficiency in delivery services such as Distance between two points.
+
+## **READING THE DATASET**
+
+```{r}
+# Attaching the packages needed
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(lubridate)
+library(lattice)
+library(psych)
+library(tidyverse)
+library(caret)
+library(stats)
+library(Amelia)
+library(tibbletime)
+library(tibble)
+library(CatEncoders)
+```
+
+
+```{r}
+# Reading the data
+sendy <- read.csv("D:/Downloads/Train.csv")%>% as_tibble()
+```
+
+```{r}
+# Previewing the top of the dataset
+head(sendy)
+```
+
+```{r}
+# Look at the bottom of the dataset
+tail(sendy)
+```
+
+```{r}
+# Looking at the datatypes of our columns
+lapply(sendy,class)
+```
+
+```{r}
+# Look at the structure
+str(sendy)
+```
+
+```{r}
+# number of records in the dataset
+dim(sendy)
+```
+
+```{r}
+# Looking at the summary of the data
+summary(sendy)
+```
+
+
+## Data Tidying
+```{r}
+# get column names
+colnames(sendy)
+```
+```{R}
+# Checking the completeness of the data at hand
+colSums(is.na(sendy))
+```
+```{R}
+# Dropping the Precipitation column
+sendy = subset(sendy, select = -c(Precipitation.in.millimeters, Vehicle.Type) )
+```
+```{R}
+# Mean imputation of temp column
+sendy$Temperature[is.na(sendy$Temperature)] <- mean(sendy$Temperature, na.rm = TRUE)
+```
+
+```{R}
+# Checking the completeness of the data after handling
+colSums(is.na(sendy))
+```
+```{R}
+# Drop the remaining missing values
+sendy = na.omit(sendy)
+```
+```{R}
+# Checking the shape of the dataset
+dim(sendy)
+```
+```{R}
+# Checking the consistency of the data
+df =duplicated(sendy)
+sum(df)
+```
+```{R}
+boxplot(sendy$Distance..KM.,
+         main = "Distance(KM)",
+         col = "Blue",
+         border = "Black",
+         horizontal = T,
+         notch = T,
+         ylab = "",
+         xlab = "Distance")
+```
+
+```{R}
+boxplot(sendy$Temperature, na.rm=T,
+         main = "Temperature",
+         col = "Blue",
+         border = "Black",
+         horizontal = T,
+         notch = T,
+         ylab = "",
+         xlab = "Temperature")
+```
+
+```{R}
+boxplot(sendy$Time.from.Pickup.to.Arrival,
+         main = "ETA",
+         col = "Blue",
+         border = "Black",
+         horizontal = T,
+         notch = T,
+         ylab = "",
+         xlab = "ETA")
+```
+
+```{R}
+boxplot(sendy$Placement...Day.of.Month,
+         main = "Days of the month",
+         col = "Orange",
+         border = "Brown",
+         horizontal = T,
+         notch = T,
+         ylab = "",
+         xlab = "Days of the month")
+```
+
+The outliers we had in our data included those in the Temperature, Distance and Time from pickup to arrival columns. These can be explained by other geographical factors.
+
+```{R}
+sendy = sendy %>%
+  mutate(Personal.or.Business = as.factor(Personal.or.Business),
+         Platform.Type = as.factor(Platform.Type))
+```
+
+```{R}
+sendy = sendy %>%
+  mutate_at(vars(matches("weekday")), function(x) return(factor(x)))
+
+sendy %>%
+  select(contains("weekday")) %>%
+  glimpse()
+```
+
+```{R}
+sendy = sendy %>%
+  mutate_at(vars(matches("Day")), function(x) return(factor(x)))
+
+sendy %>%
+  select(contains("Day")) %>%
+  glimpse()
+```
+
+```{R}
+
+sendy_hr = sendy %>%dplyr::rename(ETA = Time.from.Pickup.to.Arrival)%>% 
+mutate_at(vars(matches("Time")), function(x) return(format(strptime((x), "%I:%M:%S %p"), format = "%H"))) %>%
+mutate_at(vars(matches("Time")), function(x) return(as.factor((x))))
+
+sendy_hr %>%
+  select(contains("Time")) %>%
+  glimpse()
+```
+
+```{R}
+glimpse(sendy_hr)
+```
+
+### Performing EDA
+#### Univariate Analysis
+```{r}
+# A dataset description
+describe(sendy_hr)
+```
+
+
+```{R}
+# Numeric variables
+df =  sendy_hr %>%
+  select_if(is.numeric) %>%
+  select(-ends_with("lat"), -ends_with("long"), -contains("month"))
+```
+
+```{r}
+colMeans(df)
+```
+
+* The average distance between the pickup and delivery locations is 9.5 KM.
+* Average temperature at the time of order placement is 23.25 Degrees Celsius.
+* Average ETA is 1556 Seconds.
+
+```{r}
+#Getting the median
+df%>% summarise_if(is.numeric, median)
+```
+
+```{r}
+getmode = function(v){
+   uniqv <- unique(v)
+   uniqv[which.max(tabulate(match(v, uniqv)))]  
+}
+```
+
+```{r}
+#Getting the mode
+df%>% summarise_if(is.numeric,getmode)
+```
+
+### Measures of Dispersion
+#### **VARIANCE**
+```{r}
+Distance <- df$Distance..KM.
+Temperature <- df$Temperature
+ETA <- df$ETA
+```
+
+```{r}
+Distance.variance = var(Distance)
+Distance.variance
+```
+
+```{r}
+Temperature.variance = var(Temperature)
+Temperature.variance
+```
+
+```{r}
+ETA.variance = var(ETA)
+ETA.variance
+```
+
+#### **Standard Deviation**
+```{r}
+Distance.Standard.Deviation <- sd(Distance)
+Distance.Standard.Deviation
+```
+
+```{r}
+Temperature.Standard.Deviation <- sd(Temperature)
+Temperature.Standard.Deviation
+```
+
+```{r}
+ETA.Standard.Deviation <- sd(ETA)
+ETA.Standard.Deviation
+```
+
+#### **Skewness**
+```{r}
+# Load the moments library that allows us to compute skewness and kurtosis
+library(moments)
+```
+
+```{r}
+apply(df,2,skewness)
+```
+
+* Distance and ETA are positively skewed while temperature is negatively skewed.
+
+#### **Kurtosis**
+```{r}
+apply(df,2, kurtosis)
+```
+
+
+
+```{r}
+library(ggplot2)
+```
+
+```{r}
+par(mfrow=c(1, 2))
+
+Customer.Type.distribution <- table(sendy$Personal.or.Business)
+barplot(Customer.Type.distribution,main = "Customer Type Distribution")
+
+
+
+```
+
+The most popular customers are businesses.
+
+```{r}
+Platform.distribution <- table(sendy$Platform.Type)
+barplot(Platform.distribution,main = "Platform Distribution")
+
+```
+
+The most commonly used platform is platform 3 followed by platform 1.
+
+```{r}
+Day.order.placed.distribution <- table(sendy$Placement...Day.of.Month)
+barplot(Day.order.placed.distribution,main="Day Order placed Distribution")
+```
+The most common day of the month when orders were placed is the 8th followed by 13th and 7th day.
+
+```{r}
+colnames(sendy_hr)
+```
+
+```{r}
+Weekday.order.placed.distribution <- table(sendy_hr$Placement...Weekday..Mo...1.)
+barplot(Weekday.order.placed.distribution,main="Weekday Order placed Distribution")
+```
+The most popular day when orders were placed was Thursday followed by Friday and Tuesday. The least popular days were Saturday and Sunday.
+
+```{r}
+library('plyr')
+```
+
+```{R}
+User_df=count(sendy_hr, 'User.Id') 
+```
+
+```{r}
+head(arrange(User_df, desc(freq)),10)
+```
+
+The most recurring customer has the user id "User_Id_393".
+
+```{r}
+Rider_df=count(sendy_hr, 'Rider.Id') 
+```
+
+```{r}
+head(arrange(Rider_df, desc(freq)),10)
+```
+
+The rider with the most deliveries has the Rider Id "Rider_Id_726".
+
+### Univariate Analysis
+```{r}
+
+# A dataset description
+describe(sendy_hr)
+```
+```{R}
+ggplot(data = sendy_hr) +
+  geom_histogram(mapping = aes(x = ETA), 
+                 fill = "lightgreen", col = "black") +
+  labs(x = "Delivery time in seconds", y = "Count") +
+  theme_classic()
+```
+```{R}
+# Review the deliveries that took less than 5 minutes
+
+sendy_hr = sendy_hr %>% dplyr:: filter(ETA > 5*60)
+```
+```{R}
+sendy_hr %>%
+  select_if(is.numeric) %>%
+  map(~summary(.))
+
+sendy_hr = sendy_hr %>%
+  mutate(Temperature = replace_na(Temperature, mean(Temperature, na.rm = T))) 
+```
+```{R}
+ggplot(data = sendy_hr) +
+  geom_histogram(mapping = aes(x = Temperature), 
+                 fill = "lightblue", col = "black") +
+  labs(x = "Temperature", y = "Count") +
+  theme_classic()
+```
+
+
+
+```{R}
+# Calculate the correlations
+corr <- cor(df, use = "complete.obs")
+library(ggcorrplot)
+ggcorrplot(round(corr, 2), 
+           type = "lower", lab = T)
+```
+
+## Implementing the solution
+
+```{R}
+# Taking a general look at the data
+glimpse(sendy_hr)
+```
+
+```{R}
+
+# Dropping columns 
+se = subset(sendy_hr, select = -c(Destination.Long,Destination.Lat,Pickup.Long,Pickup.Lat,Order.No))
+head(se,2)
+```
+
+```{R}
+library(CatEncoders)
+
+# Label encode the categorical columns
+
+# for Personal or Business
+encode = LabelEncoder.fit(se$Personal.or.Business)
+se$Personal.or.Business = transform(encode, se$Personal.or.Business)
+
+# for userid
+encode = LabelEncoder.fit(se$User.Id)
+se$User.Id = transform(encode, se$User.Id)
+
+# for riderid
+encode = LabelEncoder.fit(se$Rider.Id)
+se$Rider.Id = transform(encode, se$Rider.Id)
+
+head(se)
+```
+
+```{r}
+tail(se)
+```
+
+```{R}
+# Shuffle by row indices
+rows <- sample(nrow(se))
+
+# Shuffle
+sendy_shuffled <- se[rows, ]
+```
+
+```{r}
+# For reprocibility, set the seed
+set.seed(0)
+
+# Create a random order to split the data, that is if not shuffled
+index <- createDataPartition(sendy_shuffled$ETA,
+                                  p = 0.70, list = FALSE)
+```
+
+```{R}
+# Create training and test sets
+training <- sendy_shuffled[index, ] 
+testing <- sendy_shuffled[-index, ]
+```
+
+```{r}
+# We want to be in control of validation
+my_control <- trainControl(method = "cv", 
+                           number = 5, 
+                           verboseIter = FALSE)
+```
+
+```{r}
+library(gbm)
+```
+
+```{r}
+gboost=gbm(ETA ~ . ,data = training, distribution = "gaussian",n.trees = 3000,
+                  shrinkage = 0.01, interaction.depth = 4, cv.folds=5)
+gboost
+
+summary(gboost)#Summary gives a table of Variable Importance and a plot of Variable Importance
+```
+
+```{r}
+n.trees = seq(from=100 ,to=3000, by=100) #no of trees-a vector of 100 values
+```
+
+```{r}
+#Generating a Prediction matrix for each Tree
+predmatrix<-predict(gboost,testing,n.trees =n.trees )
+dim(predmatrix) #dimensions of the Prediction Matrix
+```
+```{r}
+test.error<-with(testing,apply( (predmatrix-ETA)^2,2,mean))
+head(test.error)
+```
+
+```{r}
+plot(n.trees , test.error , pch=19,col="blue",xlab="Number of Trees",ylab="Test Error", main = "Perfomance of Boosting on Test")
+```
+
+```{r}
+# selecting the features for our subset with influence > 1
+training = subset(training, select = c(Distance..KM.,Arrival.at.Destination...Time,Pickup...Time,Placement...Day.of.Month,Confirmation...Time,Confirmation...Day.of.Month,Placement...Time,Arrival.at.Pickup...Time,ETA))
+testing = subset(testing, select = c(Distance..KM.,Arrival.at.Destination...Time,Pickup...Time,Placement...Day.of.Month,Confirmation...Time,Confirmation...Day.of.Month,Placement...Time,Arrival.at.Pickup...Time,ETA))
+
+```
+
+```{r}
+# Fit the model
+lm_model <- suppressWarnings(suppressMessages(train(ETA~ ., 
+                  data = training, 
+                  method = 'lm', 
+                  trControl = my_control)))
+
+
+lm_model
+```
+
+```{r}
+predicted <- predict(lm_model, testing)
+```
+
+
+```{r}
+library(xgboost)
+xgb_model <- suppressWarnings(suppressMessages(train(ETA~ ., 
+                  data = training, 
+                  method = 'xgbTree', 
+                  trControl = my_control)))
+```
+
+```{r}
+colMeans(xgb_model$results)%>% as.data.frame()
+```
+
+```{r}
+xgb_model$results[108,]
+```
+
+### Unsupervised learning
+```{r}
+library(factoextra)
+```
+```{r}
+# Elbow method
+fviz_nbclust(training, kmeans, method = "wss") +
+    geom_vline(xintercept = 3, linetype = 2)+
+  labs(subtitle = "Elbow method")
+```
+
+
+```{r}
+#implementing the Kmeans using 3 clusters as suggested by majority of the methods
+km <- kmeans(training,3,iter.max = 10, nstart = 50)
+```
+
+## **Conclusions**
+* The average distance between the pickup and delivery locations is 9.5 KM.
+* Average temperature at the time of order placement is 23.25 Degrees Celsius.
+* When a person places an order, they should expect to wait for the order delivery for roughly 1556 Seconds depending on their distance they are from the pick up point.
+* The most popular day when orders were placed was Thursday followed by Friday and Tuesday and the least popular days were Saturday and Sunday.
+* The most common day of the month when orders were placed is the 8th followed by 13th and 7th day.
+* The most commonly used platform is platform 3 followed by platform 1.
+* The most popular customers on the Sendy platform are businesses.
+* The customer with the most orders on Sendy, that’s the most frequent customer, is the customer with the user ID 393
+* The rider that has had the most number of order deliveries done is the rider with the ID 726
+
+
